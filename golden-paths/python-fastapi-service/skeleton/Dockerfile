@@ -10,7 +10,7 @@ RUN uv venv /opt/venv && VIRTUAL_ENV=/opt/venv uv pip install --no-cache .
 COPY src ./src
 RUN VIRTUAL_ENV=/opt/venv uv pip install --no-cache --no-deps .
 
-FROM python:3.13-alpine AS runtime
+FROM python:3.14-alpine AS runtime
 ENV PATH="/opt/venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
