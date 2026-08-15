@@ -1,6 +1,8 @@
 # This dockerfile builds an image for the backend package.
 # It should be executed with the root of the repo as docker context.
 #
+# checkov:skip=CKV_DOCKER_2:Backstage exposes /healthcheck and the portal is deployed with Kubernetes probes against it; a Dockerfile HEALTHCHECK would duplicate that with no orchestrator acting on the result.
+#
 # Before building this image, be sure to have run the following commands in the repo root:
 #
 # yarn install --immutable

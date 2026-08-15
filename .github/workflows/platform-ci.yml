@@ -93,7 +93,10 @@ jobs:
         uses: bridgecrewio/checkov-action@1246d92f57abae29d5db5f9aeeed2a9813e52d7d # v12
         with:
           directory: .
-          framework: terraform,helm,kubernetes,dockerfile,github_actions
+          # Frameworks and the documented skip list both live in .checkov.yml,
+          # so a suppression is a reviewed change to a file with reasons in it
+          # rather than a flag buried in workflow YAML.
+          config_file: .checkov.yml
           soft_fail: false
           output_format: cli,sarif
           output_file_path: console,checkov.sarif

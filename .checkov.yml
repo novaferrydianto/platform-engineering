@@ -1,0 +1,85 @@
+# Checkov baseline for this platform.
+#
+# Every entry is a decision, not a convenience. A check is skipped here only
+# when it is a false positive against how these modules are written, or a
+# trade-off the platform has taken deliberately and can defend. Anything else
+# gets fixed in the module.
+#
+# Adding to this list is a reviewable change: CODEOWNERS covers this file.
+
+framework:
+  - terraform
+  - helm
+  - kubernetes
+  - dockerfile
+  - github_actions
+
+skip-check:
+  # --- False positives against how these modules are written ---
+
+  # KMS key policies here use resources = ["*"], which in a key policy means
+  # "this key" — it is the only valid value. Checkov's generic IAM checks read
+  # it as an unscoped wildcard.
+  - CKV_AWS_356
+  - CKV_AWS_109
+  - CKV_AWS_111
+
+  # Default KMS key policy (root account administration) is correct for keys
+  # consumed only by services in the same account. An explicit policy would add
+  # surface without removing any.
+  - CKV2_AWS_64
+
+  # Security group rules here reference other security groups, never CIDRs.
+  # Checkov reports the rule as open because it cannot resolve the reference.
+  - CKV_AWS_25
+
+  # Cloud SQL uses ssl_mode = "ENCRYPTED_ONLY". These checks look for the
+  # deprecated require_ssl field, which Google replaced.
+  - CKV_GCP_6
+
+  # RDS enforces TLS through the attached parameter group (rds.force_ssl for
+  # postgres, require_secure_transport for mysql). The parameter has to be
+  # conditional on engine — the two cannot both be set — and Checkov cannot
+  # resolve a dynamic block back to the instance.
+  - CKV2_AWS_69
+
+  # Node-level settings (workload metadata, client certificates) are configured
+  # on the managed node pools, not on the cluster's removed default pool, which
+  # is where Checkov looks.
+  - CKV_GCP_69
+  - CKV_GCP_13
+
+  # --- Deliberate trade-offs ---
+
+  # Log retention is 90 days, set per module and overridable. One year of hot
+  # CloudWatch retention is a cost decision, not a security one; longer archival
+  # belongs in S3 with a lifecycle policy.
+  - CKV_AWS_338
+
+  # Cross-region replication doubles storage cost and creates a second copy of
+  # state to secure. Recovery here relies on versioning, which is enabled.
+  - CKV_AWS_144
+
+  # Event notifications are a workload concern. A module cannot know what should
+  # consume them, and an unconsumed notification target is dead configuration.
+  - CKV2_AWS_62
+
+  # Requires caller-supplied resources this module deliberately does not create:
+  # a disk encryption set (CKV_AZURE_117) and VM sizes guaranteed to support
+  # ephemeral OS disks (CKV_AZURE_226). Both are exposed as inputs instead.
+  - CKV_AZURE_117
+  - CKV_AZURE_226
+
+  # Google Groups RBAC needs an org-level group that only the GCP org admin can
+  # create; it is exposed as a module input rather than hardcoded.
+  - CKV_GCP_65
+
+  # Database major version is pinned intentionally. Tracking "latest" would make
+  # an upgrade happen on Google's schedule rather than the platform team's.
+  - CKV_GCP_79
+
+  # Access logging writes to a second bucket that the module would have to
+  # create and secure, recursively. Audit trails come from CloudTrail data
+  # events and GCP audit logs instead.
+  - CKV_AWS_18
+  - CKV_GCP_62

@@ -118,6 +118,9 @@ jobs:
         uses: bridgecrewio/checkov-action@1246d92f57abae29d5db5f9aeeed2a9813e52d7d # v12
         with:
           directory: .
+          # No config_file here: a generated service repo has no .checkov.yml of
+          # its own. Suppressions a service needs go inline, next to the code
+          # they excuse, where a reviewer sees them.
           framework: terraform,helm,kubernetes,dockerfile,github_actions
           soft_fail: false
           output_format: cli,sarif
