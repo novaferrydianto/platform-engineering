@@ -46,6 +46,16 @@ updates:
     groups:
       backstage:
         patterns: ['@backstage/*']
+    ignore:
+      # Backstage core requires React 18 and React Router 6.
+      - dependency-name: 'react'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'react-dom'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'react-router'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'react-router-dom'
+        update-types: ['version-update:semver-major']
 
   - package-ecosystem: terraform
     directory: /infrastructure-modules
@@ -70,9 +80,17 @@ updates:
     schedule:
       interval: weekly
     labels: [dependencies, golden-path]
+    ignore:
+      # Standardized on Node 24 LTS.
+      - dependency-name: 'node'
+        update-types: ['version-update:semver-major']
 
   - package-ecosystem: docker
     directory: /golden-paths/python-fastapi-service/skeleton
     schedule:
       interval: weekly
     labels: [dependencies, golden-path]
+    ignore:
+      # Standardized on Python 3.13.
+      - dependency-name: 'python'
+        update-types: ['version-update:semver-major']
