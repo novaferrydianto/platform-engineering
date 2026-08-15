@@ -1,0 +1,15 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: idp-portal
+  description: Backstage-based self-service portal for the Internal Developer Platform
+  annotations:
+    backstage.io/techdocs-ref: dir:../docs
+  tags:
+    - backstage
+    - platform
+spec:
+  type: website
+  lifecycle: production
+  owner: platform-team
+  system: internal-developer-platform

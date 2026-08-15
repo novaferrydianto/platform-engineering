@@ -1,0 +1,122 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: go-service
+  title: Go Service
+  description: |
+    Production-ready Go HTTP service on the paved road — stdlib net/http, slog,
+    Prometheus metrics, a scratch-based container, Helm chart, and CI/CD wired to
+    the platform's reusable workflows. The default choice for new backend services.
+  tags:
+    - recommended
+    - go
+    - service
+    - backend
+spec:
+  owner: platform-team
+  type: service
+
+  parameters:
+    - title: Service details
+      required: [name, description, owner]
+      properties:
+        name:
+          title: Name
+          type: string
+          description: Unique name of the service (kebab-case)
+          pattern: '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
+          ui:autofocus: true
+        description:
+          title: Description
+          type: string
+          description: What this service does
+        owner:
+          title: Owner
+          type: string
+          ui:field: OwnerPicker
+          ui:options:
+            catalogFilter:
+              kind: Group
+        system:
+          title: System
+          type: string
+          ui:field: EntityPicker
+          ui:options:
+            catalogFilter:
+              kind: System
+
+    - title: Runtime target
+      required: [cloud, environment]
+      properties:
+        cloud:
+          title: Cloud
+          type: string
+          enum: [aws, gcp, azure]
+          enumNames: ['AWS', 'Google Cloud', 'Azure']
+          default: aws
+        environment:
+          title: Initial environment
+          type: string
+          enum: [dev, staging, prod]
+          default: dev
+        replicas:
+          title: Replicas
+          type: integer
+          default: 2
+          minimum: 1
+          maximum: 10
+
+    - title: Repository
+      required: [repoUrl]
+      properties:
+        repoUrl:
+          title: Repository location
+          type: string
+          ui:field: RepoUrlPicker
+          ui:options:
+            allowedHosts: [github.com]
+
+  steps:
+    - id: fetch
+      name: Render service skeleton
+      action: fetch:template
+      input:
+        url: ./skeleton
+        values:
+          name: ${{ parameters.name }}
+          description: ${{ parameters.description }}
+          owner: ${{ parameters.owner }}
+          system: ${{ parameters.system }}
+          cloud: ${{ parameters.cloud }}
+          environment: ${{ parameters.environment }}
+          replicas: ${{ parameters.replicas }}
+          repoUrl: ${{ parameters.repoUrl }}
+          destination: ${{ parameters.repoUrl | parseRepoUrl }}
+
+    - id: publish
+      name: Publish to GitHub
+      action: publish:github
+      input:
+        repoUrl: ${{ parameters.repoUrl }}
+        description: ${{ parameters.description }}
+        defaultBranch: main
+        repoVisibility: private
+        deleteBranchOnMerge: true
+        requireCodeOwnerReviews: true
+        requiredApprovingReviewCount: 1
+        protectDefaultBranch: true
+
+    - id: register
+      name: Register in catalog
+      action: catalog:register
+      input:
+        repoContentsUrl: ${{ steps.publish.output.repoContentsUrl }}
+        catalogInfoPath: /catalog-info.yaml
+
+  output:
+    links:
+      - title: Repository
+        url: ${{ steps.publish.output.remoteUrl }}
+      - title: Open in catalog
+        icon: catalog
+        entityRef: ${{ steps.register.output.entityRef }}

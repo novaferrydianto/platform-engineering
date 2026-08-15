@@ -1,0 +1,28 @@
+# Dev VM for platform-engineering. See scripts/vm/README.md for provider
+# setup notes (VMware Workstation Pro requires the paid vagrant-vmware-desktop
+# plugin; VirtualBox is a free alternative for testing this Vagrantfile).
+Vagrant.configure("2") do |config|
+  config.vm.box = "generic/ubuntu2404"
+  config.vm.hostname = "platform-engineering"
+
+  config.vm.provider "vmware_desktop" do |vmware|
+    vmware.vmx["memsize"] = "8192"
+    vmware.vmx["numvcpus"] = "4"
+    vmware.gui = false
+  end
+
+  # Free fallback so this Vagrantfile is usable without the VMware plugin.
+  config.vm.provider "virtualbox" do |vb|
+    vb.memory = 8192
+    vb.cpus = 4
+  end
+
+  # Backstage frontend (3000) and backend (7007).
+  config.vm.network "forwarded_port", guest: 3000, host: 3000
+  config.vm.network "forwarded_port", guest: 7007, host: 7007
+
+  # Mounts the repo root (this file lives at scripts/vm/) into the guest.
+  config.vm.synced_folder "../..", "/home/vagrant/platform-engineering"
+
+  config.vm.provision "shell", path: "provision.sh", privileged: false
+end

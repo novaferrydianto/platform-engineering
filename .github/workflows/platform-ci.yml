@@ -1,0 +1,134 @@
+name: Platform CI
+
+# The platform repo validates itself with the same rigour it imposes on the
+# services it scaffolds.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: platform-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  supply-chain:
+    name: Action pinning
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Every action must be pinned to a commit SHA
+        run: bash scripts/check-action-pins.sh
+
+  workflows:
+    name: Workflow lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: actionlint
+        run: |
+          set -euo pipefail
+          bash <(curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.7/scripts/download-actionlint.bash) 1.7.7
+          ./actionlint -color
+
+  infrastructure:
+    name: OpenTofu validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-opentofu
+
+      - name: Format check
+        run: tofu fmt -check -recursive infrastructure-modules
+
+      - name: Validate every module
+        run: |
+          set -euo pipefail
+          failed=0
+          for dir in infrastructure-modules/*/*/; do
+            echo "::group::$dir"
+            # -backend=false: modules are pure and hold no state of their own.
+            if ! (cd "$dir" && tofu init -backend=false -input=false >/dev/null && tofu validate); then
+              failed=1
+            fi
+            echo "::endgroup::"
+          done
+          exit "$failed"
+
+      - name: Terragrunt format check
+        run: terragrunt hcl fmt --check --diff --working-dir provisioning/live
+
+  security:
+    name: Security scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Gitleaks
+        uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Checkov
+        uses: bridgecrewio/checkov-action@1246d92f57abae29d5db5f9aeeed2a9813e52d7d # v12
+        with:
+          directory: .
+          framework: terraform,helm,kubernetes,dockerfile,github_actions
+          soft_fail: false
+          output_format: cli,sarif
+          output_file_path: console,checkov.sarif
+
+      - name: Upload results
+        if: always()
+        uses: github/codeql-action/upload-sarif@f3712979fa5f215279b101dd0a2e3bdfb4353324 # v3
+        with:
+          sarif_file: checkov.sarif
+          category: checkov
+
+  golden-paths:
+    name: Golden path templates
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Validate template schema and skeleton wiring
+        run: python3 scripts/validate-golden-paths.py
+
+  cost:
+    name: Cost estimate
+    # Requires an INFRACOST_API_KEY secret. Gated on a repository variable so a
+    # fork without that secret gets a skipped job rather than a hard failure.
+    if: github.event_name == 'pull_request' && vars.INFRACOST_ENABLED == 'true'
+    uses: ./.github/workflows/reusable-cost-estimate.yml
+    permissions:
+      contents: read
+      pull-requests: write
+    with:
+      # Prices the Terragrunt units that actually instantiate resources.
+      # infrastructure-modules/ holds pure modules with no inputs bound, so
+      # there is nothing there to price.
+      working-directory: provisioning/live
+    secrets:
+      infracost-api-key: ${{ secrets.INFRACOST_API_KEY }}

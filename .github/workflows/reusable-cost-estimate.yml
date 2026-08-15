@@ -1,0 +1,110 @@
+name: Reusable cost estimate
+
+# Estimates the cloud cost of an infrastructure change and posts the delta on
+# the PR, so the number is visible while the change is still reviewable rather
+# than on next month's bill.
+#
+# Read-only: this never authenticates to a cloud account and never runs `apply`.
+# Infracost prices resources from OpenTofu code plus its own price database.
+
+on:
+  workflow_call:
+    inputs:
+      working-directory:
+        description: Path containing the OpenTofu/Terragrunt code to price
+        type: string
+        required: false
+        default: .
+      fail-on-monthly-increase:
+        description: Fail if the monthly cost increases by more than this many USD. 0 disables the gate.
+        type: number
+        required: false
+        default: 0
+      runs-on:
+        type: string
+        required: false
+        default: ubuntu-latest
+    secrets:
+      infracost-api-key:
+        description: Infracost API key. Free for self-hosted use; issue one per repo.
+        required: true
+
+permissions:
+  contents: read
+
+env:
+  # Infracost shells out to "terraform" by default; this platform uses OpenTofu.
+  INFRACOST_TERRAFORM_BINARY: tofu
+
+jobs:
+  cost:
+    name: Cost estimate
+    runs-on: ${{ inputs.runs-on }}
+    permissions:
+      contents: read
+      pull-requests: write # to post the cost comment
+    steps:
+      - name: Set up Infracost
+        uses: infracost/actions/setup@e9d6e6cd65e168e76b0de50ff9957d2fe8bb1832 # v3
+        with:
+          api-key: ${{ secrets.infracost-api-key }}
+
+      # The base branch is priced first so the comment can show a delta rather
+      # than a meaningless absolute number.
+      - name: Check out base branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.base.ref }}
+          persist-credentials: false
+
+      # Terragrunt units resolve dependencies and module sources; Infracost
+      # needs both binaries on PATH to evaluate them.
+      - uses: ./.github/actions/setup-opentofu
+
+      - name: Generate baseline cost snapshot
+        run: |
+          infracost breakdown \
+            --path='${{ inputs.working-directory }}' \
+            --format=json \
+            --out-file=/tmp/infracost-base.json
+
+      - name: Check out PR branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Generate cost diff
+        run: |
+          infracost diff \
+            --path='${{ inputs.working-directory }}' \
+            --compare-to=/tmp/infracost-base.json \
+            --format=json \
+            --out-file=/tmp/infracost.json
+
+      - name: Post cost comment
+        run: |
+          infracost comment github \
+            --path=/tmp/infracost.json \
+            --repo='${{ github.repository }}' \
+            --pull-request='${{ github.event.pull_request.number }}' \
+            --github-token='${{ github.token }}' \
+            --behavior=update
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Enforce cost increase threshold
+        if: inputs.fail-on-monthly-increase > 0
+        run: |
+          set -euo pipefail
+          diff_total="$(jq -r '.diffTotalMonthlyCost // "0"' /tmp/infracost.json)"
+          threshold='${{ inputs.fail-on-monthly-increase }}'
+
+          # jq returns a string; compare as a float without invoking bc.
+          exceeded="$(python3 -c "print(1 if float('$diff_total') > float('$threshold') else 0)")"
+
+          printf 'Monthly cost change: $%s (threshold: $%s)\n' "$diff_total" "$threshold"
+
+          if [ "$exceeded" -eq 1 ]; then
+            echo "::error::Monthly cost increases by \$${diff_total}, above the \$${threshold} threshold for this repository."
+            exit 1
+          fi

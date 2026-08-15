@@ -1,0 +1,66 @@
+# Thin caller into the platform's reusable workflows.
+# Do not inline build/test/scan logic here — fixes land centrally in
+# novaferrydianto/platform-engineering/.github/workflows and every service picks them up.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ '${{ github.ref }}' }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    uses: novaferrydianto/platform-engineering/.github/workflows/reusable-build.yml@main
+    with:
+      language: node
+      node-version: '24'
+
+  test:
+    uses: novaferrydianto/platform-engineering/.github/workflows/reusable-test.yml@main
+    with:
+      language: node
+      node-version: '24'
+      coverage-threshold: 70
+
+  security-scan:
+    uses: novaferrydianto/platform-engineering/.github/workflows/reusable-security-scan.yml@main
+    permissions:
+      contents: read
+      security-events: write
+    with:
+      language: node
+      fail-on-severity: high
+
+  publish:
+    if: github.ref == 'refs/heads/main'
+    needs: [build, test, security-scan]
+    uses: novaferrydianto/platform-engineering/.github/workflows/reusable-docker-build-push.yml@main
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    with:
+      image-name: ${{ values.name }}
+
+  deploy-dev:
+    if: github.ref == 'refs/heads/main'
+    needs: [publish]
+    uses: novaferrydianto/platform-engineering/.github/workflows/reusable-helm-deploy.yml@main
+    permissions:
+      contents: read
+      id-token: write
+    with:
+      release-name: ${{ values.name }}
+      chart-path: helm
+      namespace: ${{ values.name }}-dev
+      environment: dev
+      cloud: ${{ values.cloud }}
+      image-tag: ${{ '${{ needs.publish.outputs.image-tag }}' }}

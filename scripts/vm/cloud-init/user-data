@@ -1,0 +1,96 @@
+#cloud-config
+# NoCloud seed for a fresh Ubuntu 24.04 cloud-image VM in VMware Workstation
+# Pro. See scripts/vm/README.md for how to build the VM and seed ISO.
+# This performs the same setup as scripts/vm/provision.sh, inlined here since
+# cloud-init's NoCloud datasource has no network access to fetch it at boot.
+
+hostname: platform-engineering
+timezone: UTC
+
+users:
+  - name: dev
+    groups: [sudo]
+    shell: /bin/bash
+    sudo: ["ALL=(ALL) NOPASSWD:ALL"]
+    lock_passwd: true
+    ssh_authorized_keys:
+      # Replace with your own public key before building the seed ISO —
+      # password auth is disabled below, so this is the only way in.
+      - ssh-ed25519 AAAA...replace-with-your-public-key... dev@workstation
+
+ssh_pwauth: false
+package_update: true
+package_upgrade: true
+
+packages:
+  - git
+  - curl
+  - ca-certificates
+  - gnupg
+  - unzip
+  - jq
+  - build-essential
+  - apt-transport-https
+  - pipx
+  - podman
+  - podman-docker
+  - uidmap
+  - slirp4netns
+
+write_files:
+  - path: /usr/local/bin/pe-provision.sh
+    permissions: "0755"
+    content: |
+      #!/usr/bin/env bash
+      # Mirrors scripts/vm/provision.sh's non-apt steps (Node, OpenTofu,
+      # Terragrunt, Go, uv/Python, kubectl, Helm, pre-commit). Packages already
+      # installed via cloud-init's `packages:` list above.
+      set -euo pipefail
+      NODE_MAJOR="24"
+      TOFU_VERSION="1.12.5"
+      TERRAGRUNT_VERSION="1.1.3"
+      GO_VERSION="1.26.6"
+
+      curl -fsSL "https://deb.nodesource.com/setup_${NODE_MAJOR}.x" | bash -
+      apt-get install -y nodejs
+      npm install -g corepack >/dev/null 2>&1 || true
+      corepack enable || true
+
+      curl -fsSL https://get.opentofu.org/install-opentofu.sh -o /tmp/install-opentofu.sh
+      chmod +x /tmp/install-opentofu.sh
+      /tmp/install-opentofu.sh --install-method standalone --opentofu-version "$TOFU_VERSION"
+      rm -f /tmp/install-opentofu.sh
+
+      curl -fsSL -o /tmp/terragrunt \
+        "https://github.com/gruntwork-io/terragrunt/releases/download/v${TERRAGRUNT_VERSION}/terragrunt_linux_amd64"
+      install -m 0755 /tmp/terragrunt /usr/local/bin/terragrunt
+      rm -f /tmp/terragrunt
+
+      curl -fsSL -o /tmp/go.tar.gz "https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz"
+      rm -rf /usr/local/go
+      tar -C /usr/local -xzf /tmp/go.tar.gz
+      rm -f /tmp/go.tar.gz
+      echo 'export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin' > /etc/profile.d/go.sh
+
+      KUBECTL_VERSION="$(curl -fsSL https://dl.k8s.io/release/stable.txt)"
+      curl -fsSL -o /tmp/kubectl "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
+      install -m 0755 /tmp/kubectl /usr/local/bin/kubectl
+      rm -f /tmp/kubectl
+
+      curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+
+      sudo -u dev bash -c 'curl -fsSL https://astral.sh/uv/install.sh | sh'
+      echo 'export PATH=$PATH:/home/dev/.local/bin' > /etc/profile.d/uv.sh
+      sudo -u dev /home/dev/.local/bin/uv python install 3.13 || true
+
+      sudo -u dev bash -c 'pipx ensurepath && pipx install pre-commit'
+      ln -sf /home/dev/.local/bin/pre-commit /usr/local/bin/pre-commit || true
+
+runcmd:
+  - [bash, /usr/local/bin/pe-provision.sh]
+  - [systemctl, enable, --now, podman.socket]
+
+final_message: |
+  platform-engineering dev VM ready after $UPTIME seconds.
+  Clone the repo (no shared-folder support on this path — see scripts/vm/README.md)
+  then run scripts/bootstrap.sh to confirm every tool is in place.

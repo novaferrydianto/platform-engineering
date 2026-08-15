@@ -1,0 +1,64 @@
+# Developer-facing API for a database. A team applies a DatabaseInstance claim
+# in their namespace; the Composition below turns it into real cloud resources.
+# This is the day-2 self-service path — no PR into provisioning/live required.
+apiVersion: apiextensions.crossplane.io/v1
+kind: CompositeResourceDefinition
+metadata:
+  name: xdatabaseinstances.platform.acme.io
+spec:
+  group: platform.acme.io
+  names:
+    kind: XDatabaseInstance
+    plural: xdatabaseinstances
+  claimNames:
+    kind: DatabaseInstance
+    plural: databaseinstances
+  defaultCompositionRef:
+    name: xdatabaseinstance-aws
+  versions:
+    - name: v1alpha1
+      served: true
+      referenceable: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required: [parameters]
+              properties:
+                parameters:
+                  type: object
+                  required: [size, engine]
+                  properties:
+                    size:
+                      type: string
+                      description: T-shirt size; maps to a concrete instance class
+                      enum: [small, medium, large]
+                      default: small
+                    engine:
+                      type: string
+                      enum: [postgres, mysql]
+                      default: postgres
+                    engineVersion:
+                      type: string
+                      default: "16"
+                    storageGB:
+                      type: integer
+                      minimum: 20
+                      maximum: 1000
+                      default: 50
+                    highAvailability:
+                      type: boolean
+                      description: Run a standby in a second availability zone
+                      default: false
+                    deletionProtection:
+                      type: boolean
+                      default: true
+            status:
+              type: object
+              properties:
+                endpoint:
+                  type: string
+                connectionSecret:
+                  type: string

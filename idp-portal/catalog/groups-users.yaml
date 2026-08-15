@@ -1,0 +1,31 @@
+---
+apiVersion: backstage.io/v1alpha1
+kind: Group
+metadata:
+  name: platform-team
+  description: Owns the Internal Developer Platform, golden paths, CI/CD templates and infrastructure modules
+spec:
+  type: team
+  profile:
+    displayName: Platform Engineering
+  children: []
+---
+apiVersion: backstage.io/v1alpha1
+kind: Group
+metadata:
+  name: application-teams
+  description: Product teams that consume the platform's golden paths
+spec:
+  type: business-unit
+  profile:
+    displayName: Application Teams
+  children: []
+---
+apiVersion: backstage.io/v1alpha1
+kind: User
+metadata:
+  name: platform-admin
+spec:
+  profile:
+    displayName: Platform Admin
+  memberOf: [platform-team]

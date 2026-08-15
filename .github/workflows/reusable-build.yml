@@ -1,0 +1,86 @@
+name: Reusable build
+
+on:
+  workflow_call:
+    inputs:
+      language:
+        description: node | python | go | static
+        type: string
+        required: true
+      node-version:
+        type: string
+        required: false
+        default: '24'
+      python-version:
+        type: string
+        required: false
+        default: '3.13'
+      go-version:
+        type: string
+        required: false
+        default: '1.26'
+      upload-artifact:
+        description: Upload the build output for a downstream deploy job
+        type: boolean
+        required: false
+        default: false
+      artifact-path:
+        type: string
+        required: false
+        default: dist
+      runs-on:
+        type: string
+        required: false
+        default: ubuntu-latest
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ${{ inputs.runs-on }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      # Referenced by full path, not `./` — the checkout above is the *caller's*
+      # repo, which does not contain the platform's composite actions.
+      - uses: novaferrydianto/platform-engineering/.github/actions/setup-runtime@main
+        with:
+          language: ${{ inputs.language }}
+          node-version: ${{ inputs.node-version }}
+          python-version: ${{ inputs.python-version }}
+          go-version: ${{ inputs.go-version }}
+
+      - name: golangci-lint
+        if: inputs.language == 'go'
+        uses: golangci/golangci-lint-action@9fae48acfc02a90574d7c304a1758ef9895495fa # v7
+        with:
+          version: v2.12.2
+
+      - name: Lint
+        if: inputs.language != 'go'
+        run: |
+          set -euo pipefail
+          case "${{ inputs.language }}" in
+            node|static) npm run lint --if-present ;;
+            python)      uv run ruff check . && uv run mypy src ;;
+          esac
+
+      - name: Build
+        run: |
+          set -euo pipefail
+          case "${{ inputs.language }}" in
+            node|static) npm run build ;;
+            python)      uv build ;;
+            go)          CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" ./... ;;
+          esac
+
+      - name: Upload build output
+        if: inputs.upload-artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ${{ inputs.artifact-path }}
+          path: ${{ inputs.artifact-path }}
+          retention-days: 7

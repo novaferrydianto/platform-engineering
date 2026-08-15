@@ -1,0 +1,46 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: verify-image-signatures
+  annotations:
+    policies.kyverno.io/title: Verify cosign signatures
+    policies.kyverno.io/category: Supply Chain
+    policies.kyverno.io/severity: critical
+    policies.kyverno.io/description: >-
+      reusable-docker-build-push.yml signs every published image with cosign
+      keyless. Without this policy nothing ever checks those signatures, and an
+      unsigned image pushed by any other means runs unchallenged. This closes
+      that loop at admission.
+spec:
+  validationFailureAction: Audit # promote to Enforce once reports are clean
+  background: false # signature verification needs a live registry call
+  webhookTimeoutSeconds: 30
+  failurePolicy: Fail
+  rules:
+    - name: verify-platform-images
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+      exclude:
+        any:
+          - resources:
+              namespaces: [kube-system, kyverno, argocd]
+      verifyImages:
+        - imageReferences:
+            - "ghcr.io/novaferrydianto/*"
+          # Fail closed: an image that cannot be verified is rejected rather
+          # than admitted with a warning.
+          required: true
+          mutateDigest: true
+          verifyDigest: true
+          attestors:
+            - count: 1
+              entries:
+                - keyless:
+                    # Must match the OIDC identity GitHub Actions presents when
+                    # reusable-docker-build-push.yml runs cosign sign.
+                    subject: "https://github.com/novaferrydianto/*"
+                    issuer: "https://token.actions.githubusercontent.com"
+                    rekor:
+                      url: https://rekor.sigstore.dev

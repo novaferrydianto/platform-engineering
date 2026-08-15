@@ -1,0 +1,48 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: disallow-unpinned-images
+  annotations:
+    policies.kyverno.io/title: No mutable image tags
+    policies.kyverno.io/category: Supply Chain
+    policies.kyverno.io/severity: high
+    policies.kyverno.io/description: >-
+      reusable-docker-build-push.yml deliberately never publishes `latest` and
+      emits commit-addressable tags plus a digest. This policy makes that
+      guarantee hold for anything else applied to the cluster: a mutable tag
+      means the image running tomorrow may not be the image reviewed today.
+spec:
+  validationFailureAction: Audit # promote to Enforce once reports are clean
+  background: true
+  rules:
+    - name: no-latest-tag
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+      exclude:
+        any:
+          - resources:
+              namespaces: [kube-system, kyverno, argocd]
+      validate:
+        message: "Using the `latest` tag is not permitted — deploy a specific tag or digest."
+        pattern:
+          spec:
+            containers:
+              - image: "!*:latest"
+
+    - name: require-explicit-tag
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+      exclude:
+        any:
+          - resources:
+              namespaces: [kube-system, kyverno, argocd]
+      validate:
+        message: "Images must carry an explicit tag or digest, not an implicit `latest`."
+        pattern:
+          spec:
+            containers:
+              - image: "*:*"

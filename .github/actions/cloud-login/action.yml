@@ -1,0 +1,55 @@
+name: Cloud login (OIDC)
+description: Exchanges the GitHub OIDC token for short-lived cloud credentials. No long-lived keys.
+
+inputs:
+  cloud:
+    description: aws | gcp | azure
+    required: true
+  aws-role-arn:
+    description: IAM role to assume (aws)
+    required: false
+  aws-region:
+    description: AWS region
+    required: false
+    default: ap-southeast-1
+  gcp-workload-identity-provider:
+    description: Workload Identity Provider resource name (gcp)
+    required: false
+  gcp-service-account:
+    description: Service account to impersonate (gcp)
+    required: false
+  azure-client-id:
+    description: Entra ID application client id (azure)
+    required: false
+  azure-tenant-id:
+    description: Entra ID tenant id (azure)
+    required: false
+  azure-subscription-id:
+    description: Azure subscription id (azure)
+    required: false
+
+runs:
+  using: composite
+  steps:
+    - name: Assume AWS role
+      if: inputs.cloud == 'aws'
+      uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4
+      with:
+        role-to-assume: ${{ inputs.aws-role-arn }}
+        aws-region: ${{ inputs.aws-region }}
+        role-session-name: gha-${{ github.run_id }}
+
+    - name: Authenticate to Google Cloud
+      if: inputs.cloud == 'gcp'
+      uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2
+      with:
+        workload_identity_provider: ${{ inputs.gcp-workload-identity-provider }}
+        service_account: ${{ inputs.gcp-service-account }}
+
+    - name: Authenticate to Azure
+      if: inputs.cloud == 'azure'
+      uses: azure/login@7184910d9eb2b1c5e48f7073824a90609bb9b6d6 # v2
+      with:
+        client-id: ${{ inputs.azure-client-id }}
+        tenant-id: ${{ inputs.azure-tenant-id }}
+        subscription-id: ${{ inputs.azure-subscription-id }}

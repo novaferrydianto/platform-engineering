@@ -1,0 +1,95 @@
+name: Reusable static site deploy
+
+on:
+  workflow_call:
+    inputs:
+      site-name:
+        type: string
+        required: true
+      cloud:
+        description: aws | gcp | azure
+        type: string
+        required: true
+      environment:
+        type: string
+        required: true
+      artifact-name:
+        description: Build artifact uploaded by reusable-build.yml
+        type: string
+        required: false
+        default: dist
+      runs-on:
+        type: string
+        required: false
+        default: ubuntu-latest
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ${{ inputs.runs-on }}
+    environment:
+      name: ${{ inputs.environment }}
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: ${{ inputs.artifact-name }}
+          path: dist
+
+      - uses: novaferrydianto/platform-engineering/.github/actions/cloud-login@main
+        with:
+          cloud: ${{ inputs.cloud }}
+          aws-role-arn: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          gcp-workload-identity-provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          gcp-service-account: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+          azure-client-id: ${{ vars.AZURE_CLIENT_ID }}
+          azure-tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          azure-subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      # Hashed assets are immutable and long-cached; index.html must revalidate so a
+      # deploy is visible immediately.
+      - name: Sync to object storage
+        env:
+          BUCKET: ${{ inputs.site-name }}-${{ inputs.environment }}
+        run: |
+          set -euo pipefail
+          case "${{ inputs.cloud }}" in
+            aws)
+              aws s3 sync dist/ "s3://$BUCKET/" --delete \
+                --exclude index.html --cache-control "public,max-age=31536000,immutable"
+              aws s3 cp dist/index.html "s3://$BUCKET/index.html" \
+                --cache-control "public,max-age=0,must-revalidate"
+              ;;
+            gcp)
+              gcloud storage rsync dist/ "gs://$BUCKET/" --recursive --delete-unmatched-destination-objects
+              gcloud storage objects update "gs://$BUCKET/**" --cache-control "public,max-age=31536000,immutable"
+              gcloud storage objects update "gs://$BUCKET/index.html" --cache-control "public,max-age=0,must-revalidate"
+              ;;
+            azure)
+              az storage blob upload-batch --destination '$web' --source dist \
+                --account-name "${{ vars.AZURE_STORAGE_ACCOUNT }}" --overwrite --auth-mode login
+              ;;
+          esac
+
+      - name: Invalidate CDN cache
+        run: |
+          set -euo pipefail
+          case "${{ inputs.cloud }}" in
+            aws)
+              aws cloudfront create-invalidation \
+                --distribution-id "${{ vars.CLOUDFRONT_DISTRIBUTION_ID }}" --paths "/*"
+              ;;
+            gcp)
+              gcloud compute url-maps invalidate-cdn-cache "${{ vars.GCP_URL_MAP }}" --path "/*" --async
+              ;;
+            azure)
+              az afd endpoint purge --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+                --profile-name "${{ vars.AZURE_FRONTDOOR_PROFILE }}" \
+                --endpoint-name "${{ inputs.site-name }}" --content-paths "/*"
+              ;;
+          esac

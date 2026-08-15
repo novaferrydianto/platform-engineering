@@ -1,0 +1,107 @@
+name: Reusable Helm deploy
+
+on:
+  workflow_call:
+    inputs:
+      release-name:
+        type: string
+        required: true
+      chart-path:
+        type: string
+        required: false
+        default: helm
+      namespace:
+        type: string
+        required: true
+      environment:
+        description: dev | staging | prod — maps to a GitHub Environment for approvals
+        type: string
+        required: true
+      cloud:
+        description: aws | gcp | azure
+        type: string
+        required: true
+      image-tag:
+        type: string
+        required: true
+      cluster-name:
+        description: Overrides the default `<environment>-cluster` naming
+        type: string
+        required: false
+        default: ''
+      timeout:
+        type: string
+        required: false
+        default: 5m
+      runs-on:
+        type: string
+        required: false
+        default: ubuntu-latest
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ${{ inputs.runs-on }}
+    # Every environment — dev, staging and prod alike — has required reviewers,
+    # so no deployment reaches a cluster without a human approving it.
+    environment:
+      name: ${{ inputs.environment }}
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - uses: novaferrydianto/platform-engineering/.github/actions/cloud-login@main
+        with:
+          cloud: ${{ inputs.cloud }}
+          aws-role-arn: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          gcp-workload-identity-provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          gcp-service-account: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+          azure-client-id: ${{ vars.AZURE_CLIENT_ID }}
+          azure-tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          azure-subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Fetch cluster credentials
+        env:
+          CLUSTER: ${{ inputs.cluster-name || format('{0}-cluster', inputs.environment) }}
+        run: |
+          set -euo pipefail
+          case "${{ inputs.cloud }}" in
+            aws)
+              aws eks update-kubeconfig --name "$CLUSTER" --region "${{ vars.AWS_REGION }}"
+              ;;
+            gcp)
+              gcloud container clusters get-credentials "$CLUSTER" \
+                --region "${{ vars.GCP_REGION }}" --project "${{ vars.GCP_PROJECT_ID }}"
+              ;;
+            azure)
+              az aks get-credentials --name "$CLUSTER" \
+                --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" --overwrite-existing
+              ;;
+          esac
+
+      - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4
+
+      - name: Lint chart
+        run: helm lint "${{ inputs.chart-path }}"
+
+      - name: Deploy
+        env:
+          IMAGE_TAG: ${{ inputs.image-tag }}
+        run: |
+          set -euo pipefail
+          helm upgrade --install "${{ inputs.release-name }}" "${{ inputs.chart-path }}" \
+            --namespace "${{ inputs.namespace }}" --create-namespace \
+            --set image.tag="$IMAGE_TAG" \
+            --atomic --wait --timeout "${{ inputs.timeout }}"
+
+      - name: Report rollout
+        if: always()
+        run: |
+          helm status "${{ inputs.release-name }}" -n "${{ inputs.namespace }}" >> "$GITHUB_STEP_SUMMARY" || true

@@ -1,0 +1,45 @@
+# Thin caller into the platform's reusable workflows.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ '${{ github.ref }}' }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    uses: novaferrydianto/platform-engineering/.github/workflows/reusable-build.yml@main
+    with:
+      language: static
+      node-version: '24'
+      upload-artifact: true
+
+  security-scan:
+    uses: novaferrydianto/platform-engineering/.github/workflows/reusable-security-scan.yml@main
+    permissions:
+      contents: read
+      security-events: write
+    with:
+      language: node
+      fail-on-severity: high
+
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: [build, security-scan]
+    uses: novaferrydianto/platform-engineering/.github/workflows/reusable-static-deploy.yml@main
+    permissions:
+      contents: read
+      id-token: write
+    with:
+      site-name: ${{ values.name }}
+      cloud: ${{ values.cloud }}
+      environment: ${{ values.environment }}
+      artifact-name: dist

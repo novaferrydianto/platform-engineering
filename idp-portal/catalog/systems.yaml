@@ -1,0 +1,56 @@
+---
+apiVersion: backstage.io/v1alpha1
+kind: Domain
+metadata:
+  name: developer-experience
+  description: Everything a product team touches to ship software on the paved road
+spec:
+  owner: platform-team
+---
+apiVersion: backstage.io/v1alpha1
+kind: System
+metadata:
+  name: internal-developer-platform
+  description: Self-service portal, golden paths, CI/CD templates, infrastructure modules and provisioning
+spec:
+  owner: platform-team
+  domain: developer-experience
+---
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: cicd-templates
+  description: Reusable GitHub Actions workflows shared by every scaffolded repo
+  links:
+    - url: https://github.com/novaferrydianto/platform-engineering/tree/main/.github/workflows
+      title: Reusable workflows
+spec:
+  type: ci-cd
+  owner: platform-team
+  system: internal-developer-platform
+---
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: infrastructure-modules
+  description: OpenTofu modules for AWS, GCP, Azure and Kubernetes
+  links:
+    - url: https://github.com/novaferrydianto/platform-engineering/tree/main/infrastructure-modules
+      title: Modules
+spec:
+  type: infrastructure
+  owner: platform-team
+  system: internal-developer-platform
+---
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: provisioning
+  description: Terragrunt environment stacks and Crossplane compositions
+  links:
+    - url: https://github.com/novaferrydianto/platform-engineering/tree/main/provisioning
+      title: Provisioning
+spec:
+  type: infrastructure
+  owner: platform-team
+  system: internal-developer-platform

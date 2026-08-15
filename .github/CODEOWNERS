@@ -1,0 +1,14 @@
+# novaferrydianto is a personal account, so ownership is the user directly.
+# Team handles (@org/team) only resolve inside a GitHub organization — if this
+# repo moves to one, swap these for @org/platform-team and @org/security-team.
+* @novaferrydianto
+
+# Security-critical paths: changes here alter the guardrails every scaffolded
+# repo inherits. Under an organization these would additionally require the
+# security team's review.
+/.github/workflows/                @novaferrydianto
+/.github/actions/                  @novaferrydianto
+/.github/CODEOWNERS                @novaferrydianto
+/infrastructure-modules/           @novaferrydianto
+/provisioning/                     @novaferrydianto
+/golden-paths/*/skeleton/.github/  @novaferrydianto

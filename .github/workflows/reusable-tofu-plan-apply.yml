@@ -1,0 +1,158 @@
+name: Reusable OpenTofu plan and apply
+
+# Plan runs on pull requests and posts the diff. Apply runs only on the default
+# branch and goes through a GitHub Environment with required reviewers — dev,
+# staging and prod all pause for manual approval before anything is applied.
+
+on:
+  workflow_call:
+    inputs:
+      working-directory:
+        description: Terragrunt unit or stack directory
+        type: string
+        required: true
+      environment:
+        description: dev | staging | prod
+        type: string
+        required: true
+      cloud:
+        description: aws | gcp | azure
+        type: string
+        required: true
+      apply:
+        description: Apply the plan (otherwise plan-only)
+        type: boolean
+        required: false
+        default: false
+      run-all:
+        description: Operate on every unit beneath working-directory
+        type: boolean
+        required: false
+        default: false
+      tofu-version:
+        type: string
+        required: false
+        default: '1.12.5'
+      terragrunt-version:
+        type: string
+        required: false
+        default: '1.1.3'
+      runs-on:
+        type: string
+        required: false
+        default: ubuntu-latest
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    runs-on: ${{ inputs.runs-on }}
+    permissions:
+      contents: read
+      id-token: write
+      pull-requests: write
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    outputs:
+      exitcode: ${{ steps.plan.outputs.exitcode }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - uses: novaferrydianto/platform-engineering/.github/actions/setup-opentofu@main
+        with:
+          tofu-version: ${{ inputs.tofu-version }}
+          terragrunt-version: ${{ inputs.terragrunt-version }}
+
+      - uses: novaferrydianto/platform-engineering/.github/actions/cloud-login@main
+        with:
+          cloud: ${{ inputs.cloud }}
+          aws-role-arn: ${{ vars.AWS_PLAN_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          gcp-workload-identity-provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          gcp-service-account: ${{ vars.GCP_PLAN_SERVICE_ACCOUNT }}
+          azure-client-id: ${{ vars.AZURE_CLIENT_ID }}
+          azure-tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          azure-subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Format check
+        run: terragrunt hcl fmt --check --diff
+
+      - name: Validate
+        run: terragrunt ${{ inputs.run-all && 'run --all' || 'run' }} -- validate
+
+      - name: Plan
+        id: plan
+        run: |
+          set -euo pipefail
+          terragrunt ${{ inputs.run-all && 'run --all' || 'run' }} -- plan -no-color -out=tfplan | tee plan.txt
+          echo "exitcode=$?" >> "$GITHUB_OUTPUT"
+
+      - name: Post plan to PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        env:
+          PLAN_DIR: ${{ inputs.working-directory }}
+        with:
+          script: |
+            const fs = require('fs');
+            const plan = fs.readFileSync(`${process.env.PLAN_DIR}/plan.txt`, 'utf8');
+            const truncated = plan.length > 60000 ? plan.slice(0, 60000) + '\n... truncated' : plan;
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `### OpenTofu plan — \`${process.env.PLAN_DIR}\`\n\n<details><summary>Show plan</summary>\n\n\`\`\`terraform\n${truncated}\n\`\`\`\n\n</details>`,
+            });
+
+      - name: Upload plan
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: tfplan-${{ inputs.environment }}
+          path: ${{ inputs.working-directory }}/**/tfplan
+          retention-days: 5
+
+  apply:
+    if: inputs.apply && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    needs: [plan]
+    runs-on: ${{ inputs.runs-on }}
+    environment:
+      name: ${{ inputs.environment }}
+    permissions:
+      contents: read
+      id-token: write
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - uses: novaferrydianto/platform-engineering/.github/actions/setup-opentofu@main
+        with:
+          tofu-version: ${{ inputs.tofu-version }}
+          terragrunt-version: ${{ inputs.terragrunt-version }}
+
+      - uses: novaferrydianto/platform-engineering/.github/actions/cloud-login@main
+        with:
+          cloud: ${{ inputs.cloud }}
+          aws-role-arn: ${{ vars.AWS_APPLY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          gcp-workload-identity-provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          gcp-service-account: ${{ vars.GCP_APPLY_SERVICE_ACCOUNT }}
+          azure-client-id: ${{ vars.AZURE_CLIENT_ID }}
+          azure-tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          azure-subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: tfplan-${{ inputs.environment }}
+          path: ${{ inputs.working-directory }}
+
+      # Applies the reviewed plan file, so what was approved is exactly what runs.
+      - name: Apply
+        run: terragrunt ${{ inputs.run-all && 'run --all' || 'run' }} -- apply tfplan

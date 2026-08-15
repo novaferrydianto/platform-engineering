@@ -1,0 +1,63 @@
+replicaCount: ${{ values.replicas }}
+
+image:
+  repository: ghcr.io/${{ values.destination.owner }}/${{ values.name }}
+  pullPolicy: IfNotPresent
+  tag: "" # defaults to .Chart.AppVersion; CI overrides with the immutable image digest/tag
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8080
+
+ingress:
+  enabled: false
+  className: nginx
+  annotations: {}
+  hosts: []
+  tls: []
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+autoscaling:
+  enabled: false
+  minReplicas: ${{ values.replicas }}
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+
+# Deny-all egress/ingress by default; open explicitly per service.
+networkPolicy:
+  enabled: true
+  allowedIngressNamespaces: []
+  allowedEgressCidrs: []
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: [ALL]
+
+env:
+  LOG_LEVEL: info
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

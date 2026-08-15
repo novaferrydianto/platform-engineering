@@ -1,0 +1,18 @@
+# What an application team writes. Everything else — encryption, backups,
+# private networking, credential handling — comes from the Composition.
+apiVersion: platform.acme.io/v1alpha1
+kind: DatabaseInstance
+metadata:
+  name: orders
+  namespace: orders-prod
+spec:
+  parameters:
+    size: medium
+    engine: postgres
+    engineVersion: "16"
+    storageGB: 100
+    highAvailability: true
+
+  # Crossplane writes connection details here; mount it into the workload.
+  writeConnectionSecretToRef:
+    name: orders-database

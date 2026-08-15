@@ -1,0 +1,56 @@
+# Same gates CI enforces, run locally before the commit exists. Install with:
+#   pre-commit install && pre-commit install --hook-type pre-push
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-merge-conflict
+      - id: check-yaml
+        # Backstage templates and Helm charts are templated YAML, not plain YAML.
+        exclude: ^(golden-paths/.*/skeleton/helm/templates/|golden-paths/.*/skeleton/.*\.yaml$)
+      - id: check-json
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: detect-private-key
+      - id: check-added-large-files
+        args: [--maxkb=1024]
+        # Yarn Berry requires its release binary to be committed — that is how a
+        # checkout pins the package manager. It is the one legitimate file over
+        # the limit, so it is excluded by path rather than by raising the ceiling
+        # for everything.
+        exclude: ^idp-portal/\.yarn/releases/
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.24.0
+    hooks:
+      - id: gitleaks
+
+  - repo: https://github.com/antonbabenko/pre-commit-terraform
+    rev: v1.96.3
+    hooks:
+      - id: terraform_fmt
+        files: ^infrastructure-modules/
+      - id: terraform_validate
+        files: ^infrastructure-modules/
+        args: [--hook-config=--retry-once-with-cleanup=true]
+      - id: terraform_tflint
+        files: ^infrastructure-modules/
+      - id: terraform_checkov
+        files: ^infrastructure-modules/
+        args: [--args=--quiet, --args=--compact]
+
+  - repo: https://github.com/rhysd/actionlint
+    rev: v1.7.7
+    hooks:
+      - id: actionlint
+
+  - repo: local
+    hooks:
+      # Tags are mutable; a SHA is not. This is the supply-chain control that
+      # matters most in this repo, so it is enforced locally and in CI.
+      - id: actions-sha-pinned
+        name: GitHub Actions must be pinned to a commit SHA
+        entry: scripts/check-action-pins.sh
+        language: script
+        files: ^(\.github/(workflows|actions)/|golden-paths/.*/skeleton/\.github/workflows/).*\.ya?ml$
+        pass_filenames: false

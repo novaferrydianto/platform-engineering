@@ -1,0 +1,43 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: restrict-image-registries
+  annotations:
+    policies.kyverno.io/title: Allowed registries only
+    policies.kyverno.io/category: Supply Chain
+    policies.kyverno.io/severity: high
+    policies.kyverno.io/description: >-
+      Images may only come from registries this platform controls or has
+      explicitly vetted. Pod Security Standards do not inspect image provenance
+      at all, so without this an admitted pod can pull from anywhere.
+spec:
+  validationFailureAction: Audit # promote to Enforce once reports are clean
+  background: true
+  rules:
+    - name: allowed-registries
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+      exclude:
+        any:
+          - resources:
+              namespaces: [kube-system, kyverno, argocd]
+      validate:
+        message: >-
+          Images must come from an approved registry
+          (ghcr.io/novaferrydianto, registry.k8s.io, or public.ecr.aws).
+        foreach:
+          - list: "request.object.spec.containers"
+            deny:
+              conditions:
+                all:
+                  - key: "{{ element.image }}"
+                    operator: NotEquals
+                    value: "ghcr.io/novaferrydianto/*"
+                  - key: "{{ element.image }}"
+                    operator: NotEquals
+                    value: "registry.k8s.io/*"
+                  - key: "{{ element.image }}"
+                    operator: NotEquals
+                    value: "public.ecr.aws/*"

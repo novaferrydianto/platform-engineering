@@ -1,0 +1,40 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-resource-limits
+  annotations:
+    policies.kyverno.io/title: Explicit resource requests and limits
+    policies.kyverno.io/category: Reliability
+    policies.kyverno.io/severity: medium
+    policies.kyverno.io/description: >-
+      The namespace module's LimitRange supplies defaults but never requires a
+      workload to declare its own, so an unbounded container silently inherits
+      one. Pod Security Standards ignore resources entirely. This makes the
+      declaration explicit, which is what keeps one namespace from starving
+      its neighbours.
+spec:
+  validationFailureAction: Audit # promote to Enforce once reports are clean
+  background: true
+  rules:
+    - name: require-requests-and-limits
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+      exclude:
+        any:
+          - resources:
+              namespaces: [kube-system, kyverno, argocd]
+      validate:
+        message: >-
+          Every container must declare resources.requests.cpu,
+          resources.requests.memory, and resources.limits.memory.
+        pattern:
+          spec:
+            containers:
+              - resources:
+                  requests:
+                    cpu: "?*"
+                    memory: "?*"
+                  limits:
+                    memory: "?*"

@@ -1,0 +1,88 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: xdatabaseinstance-aws
+  labels:
+    provider: aws
+spec:
+  compositeTypeRef:
+    apiVersion: platform.acme.io/v1alpha1
+    kind: XDatabaseInstance
+
+  writeConnectionSecretsToNamespace: crossplane-system
+
+  mode: Pipeline
+  pipeline:
+    - step: render
+      functionRef:
+        name: function-patch-and-transform
+      input:
+        apiVersion: pt.fn.crossplane.io/v1beta1
+        kind: Resources
+        resources:
+          - name: rds-instance
+            base:
+              apiVersion: rds.aws.upbound.io/v1beta2
+              kind: Instance
+              spec:
+                forProvider:
+                  region: ap-southeast-1
+                  # Storage and backups are non-negotiable defaults; the claim
+                  # cannot turn them off.
+                  storageEncrypted: true
+                  storageType: gp3
+                  backupRetentionPeriod: 30
+                  backupWindow: "17:00-18:00"
+                  maintenanceWindow: "sun:18:30-sun:19:30"
+                  publiclyAccessible: false
+                  copyTagsToSnapshot: true
+                  autoMinorVersionUpgrade: true
+                  performanceInsightsEnabled: true
+                  iamDatabaseAuthenticationEnabled: true
+                  skipFinalSnapshot: false
+                  # AWS generates and rotates the master password into Secrets
+                  # Manager; it never passes through the cluster.
+                  manageMasterUserPassword: true
+                  dbSubnetGroupNameSelector:
+                    matchLabels:
+                      network: private
+                  vpcSecurityGroupIDSelector:
+                    matchLabels:
+                      access: database
+                writeConnectionSecretToRef:
+                  namespace: crossplane-system
+            patches:
+              - fromFieldPath: spec.parameters.engine
+                toFieldPath: spec.forProvider.engine
+              - fromFieldPath: spec.parameters.engineVersion
+                toFieldPath: spec.forProvider.engineVersion
+              - fromFieldPath: spec.parameters.storageGB
+                toFieldPath: spec.forProvider.allocatedStorage
+              - fromFieldPath: spec.parameters.highAvailability
+                toFieldPath: spec.forProvider.multiAz
+              - fromFieldPath: spec.parameters.deletionProtection
+                toFieldPath: spec.forProvider.deletionProtection
+              - fromFieldPath: spec.parameters.size
+                toFieldPath: spec.forProvider.instanceClass
+                transforms:
+                  - type: map
+                    map:
+                      small: db.t4g.medium
+                      medium: db.r6g.large
+                      large: db.r6g.2xlarge
+              - fromFieldPath: metadata.uid
+                toFieldPath: spec.writeConnectionSecretToRef.name
+                transforms:
+                  - type: string
+                    string:
+                      fmt: "%s-database"
+              - type: ToCompositeFieldPath
+                fromFieldPath: status.atProvider.endpoint
+                toFieldPath: status.endpoint
+            connectionDetails:
+              - name: endpoint
+                type: FromFieldPath
+                fromFieldPath: status.atProvider.endpoint
+              - name: port
+                type: FromFieldPath
+                fromFieldPath: status.atProvider.port

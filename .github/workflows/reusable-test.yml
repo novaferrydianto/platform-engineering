@@ -1,0 +1,86 @@
+name: Reusable test
+
+on:
+  workflow_call:
+    inputs:
+      language:
+        description: node | python | go
+        type: string
+        required: true
+      node-version:
+        type: string
+        required: false
+        default: '24'
+      python-version:
+        type: string
+        required: false
+        default: '3.13'
+      go-version:
+        type: string
+        required: false
+        default: '1.26'
+      coverage-threshold:
+        description: Minimum line coverage percentage; the job fails below it
+        type: number
+        required: false
+        default: 70
+      runs-on:
+        type: string
+        required: false
+        default: ubuntu-latest
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ${{ inputs.runs-on }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - uses: novaferrydianto/platform-engineering/.github/actions/setup-runtime@main
+        with:
+          language: ${{ inputs.language }}
+          node-version: ${{ inputs.node-version }}
+          python-version: ${{ inputs.python-version }}
+          go-version: ${{ inputs.go-version }}
+
+      - name: Run tests
+        run: |
+          set -euo pipefail
+          case "${{ inputs.language }}" in
+            node)   npm test ;;
+            python) uv run pytest --cov-fail-under=${{ inputs.coverage-threshold }} ;;
+            go)     CGO_ENABLED=1 go test -race -covermode=atomic -coverprofile=coverage.out ./... ;;
+          esac
+
+      - name: Enforce coverage threshold (node)
+        if: inputs.language == 'node'
+        env:
+          THRESHOLD: ${{ inputs.coverage-threshold }}
+        run: |
+          set -euo pipefail
+          summary=coverage/coverage-summary.json
+          if [ ! -f "$summary" ]; then
+            echo "::warning::no coverage summary at $summary — configure vitest json-summary reporter to enforce the threshold"
+            exit 0
+          fi
+          pct=$(node -p "require('./coverage/coverage-summary.json').total.lines.pct")
+          echo "line coverage: ${pct}% (threshold ${THRESHOLD}%)"
+          node -e "process.exit(${pct} >= ${THRESHOLD} ? 0 : 1)"
+
+      - name: Enforce coverage threshold (go)
+        if: inputs.language == 'go'
+        env:
+          THRESHOLD: ${{ inputs.coverage-threshold }}
+        run: |
+          set -euo pipefail
+          pct=$(go tool cover -func=coverage.out | tail -1 | grep -oE '[0-9]+\.[0-9]+')
+          echo "line coverage: ${pct}% (threshold ${THRESHOLD}%)"
+          awk -v p="$pct" -v t="$THRESHOLD" 'BEGIN { exit (p >= t) ? 0 : 1 }'
+
+      - name: Publish test summary
+        if: always()
+        run: echo "Tests finished for ${{ inputs.language }}" >> "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,30 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: platform-root
+  namespace: argocd
+  finalizers:
+    # Without this, deleting the root Application orphans everything it manages
+    # instead of cascading the delete.
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    # Replace with your fork before applying — Argo CD reconciles against this
+    # URL, not against whatever is checked out locally.
+    repoURL: https://github.com/novaferrydianto/platform-engineering.git
+    targetRevision: main
+    path: provisioning/gitops/applications
+    directory:
+      recurse: true
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      # Reconcile away manual cluster edits, and remove resources deleted from
+      # git. This is the whole point of GitOps: git is the only way in.
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false # namespaces come from OpenTofu, with PSS labels attached

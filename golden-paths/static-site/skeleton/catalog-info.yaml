@@ -1,0 +1,24 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: ${{ values.name }}
+  description: ${{ values.description }}
+  annotations:
+    github.com/project-slug: ${{ values.destination.owner }}/${{ values.destination.repo }}
+    backstage.io/techdocs-ref: dir:.
+  tags:
+    - frontend
+    - static
+    - ${{ values.cloud }}
+  {%- if values.customDomain %}
+  links:
+    - url: https://${{ values.customDomain }}
+      title: Site
+  {%- endif %}
+spec:
+  type: website
+  lifecycle: experimental
+  owner: ${{ values.owner }}
+  {%- if values.system %}
+  system: ${{ values.system }}
+  {%- endif %}

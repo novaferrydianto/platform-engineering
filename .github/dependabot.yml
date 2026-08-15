@@ -1,0 +1,78 @@
+version: 2
+
+updates:
+  # Keeps the SHA-pinned actions current. Dependabot understands the
+  # `uses: owner/repo@<sha> # vN` convention and updates both parts.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    labels: [dependencies, security]
+    groups:
+      actions:
+        patterns: ['*']
+
+  - package-ecosystem: github-actions
+    directory: /golden-paths/go-service/skeleton
+    schedule:
+      interval: weekly
+    labels: [dependencies, golden-path]
+
+  - package-ecosystem: github-actions
+    directory: /golden-paths/nodejs-service/skeleton
+    schedule:
+      interval: weekly
+    labels: [dependencies, golden-path]
+
+  - package-ecosystem: github-actions
+    directory: /golden-paths/python-fastapi-service/skeleton
+    schedule:
+      interval: weekly
+    labels: [dependencies, golden-path]
+
+  - package-ecosystem: github-actions
+    directory: /golden-paths/static-site/skeleton
+    schedule:
+      interval: weekly
+    labels: [dependencies, golden-path]
+
+  - package-ecosystem: npm
+    directory: /idp-portal
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    labels: [dependencies]
+    groups:
+      backstage:
+        patterns: ['@backstage/*']
+
+  - package-ecosystem: terraform
+    directory: /infrastructure-modules
+    schedule:
+      interval: weekly
+    labels: [dependencies, infrastructure]
+
+  - package-ecosystem: gomod
+    directory: /golden-paths/go-service/skeleton
+    schedule:
+      interval: weekly
+    labels: [dependencies, golden-path]
+
+  - package-ecosystem: docker
+    directory: /golden-paths/go-service/skeleton
+    schedule:
+      interval: weekly
+    labels: [dependencies, golden-path]
+
+  - package-ecosystem: docker
+    directory: /golden-paths/nodejs-service/skeleton
+    schedule:
+      interval: weekly
+    labels: [dependencies, golden-path]
+
+  - package-ecosystem: docker
+    directory: /golden-paths/python-fastapi-service/skeleton
+    schedule:
+      interval: weekly
+    labels: [dependencies, golden-path]

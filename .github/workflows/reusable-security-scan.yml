@@ -1,0 +1,131 @@
+name: Reusable security scan
+
+# Four gates on every PR: secrets, dependencies, static analysis, and IaC.
+# Findings at or above `fail-on-severity` fail the build.
+
+on:
+  workflow_call:
+    inputs:
+      language:
+        description: node | python | go
+        type: string
+        required: true
+      fail-on-severity:
+        description: critical | high | medium | low
+        type: string
+        required: false
+        default: high
+      scan-iac:
+        description: Scan Terraform/OpenTofu, Helm, and Kubernetes manifests
+        type: boolean
+        required: false
+        default: true
+      runs-on:
+        type: string
+        required: false
+        default: ubuntu-latest
+
+permissions:
+  contents: read
+
+jobs:
+  secrets:
+    name: Secret scan
+    runs-on: ${{ inputs.runs-on }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          # Gitleaks needs history to scan commits, not just the working tree.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Gitleaks
+        uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+  dependencies:
+    name: Dependency scan
+    runs-on: ${{ inputs.runs-on }}
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Trivy filesystem scan
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          # Pin the scanner binary too — the action only wraps it, so an
+          # unpinned trivy is an unpinned dependency in the build.
+          version: v0.74.0
+          scan-type: fs
+          scanners: vuln,secret,misconfig
+          severity: ${{ inputs.fail-on-severity == 'critical' && 'CRITICAL' || inputs.fail-on-severity == 'high' && 'CRITICAL,HIGH' || inputs.fail-on-severity == 'medium' && 'CRITICAL,HIGH,MEDIUM' || 'CRITICAL,HIGH,MEDIUM,LOW' }}
+          exit-code: '1'
+          ignore-unfixed: true
+          format: sarif
+          output: trivy-fs.sarif
+
+      - name: Upload results
+        if: always()
+        uses: github/codeql-action/upload-sarif@f3712979fa5f215279b101dd0a2e3bdfb4353324 # v3
+        with:
+          sarif_file: trivy-fs.sarif
+          category: trivy-fs
+
+  sast:
+    name: Static analysis
+    runs-on: ${{ inputs.runs-on }}
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@f3712979fa5f215279b101dd0a2e3bdfb4353324 # v3
+        with:
+          languages: ${{ inputs.language == 'python' && 'python' || inputs.language == 'go' && 'go' || 'javascript-typescript' }}
+          queries: security-extended
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@f3712979fa5f215279b101dd0a2e3bdfb4353324 # v3
+
+      - name: Analyze
+        uses: github/codeql-action/analyze@f3712979fa5f215279b101dd0a2e3bdfb4353324 # v3
+        with:
+          category: codeql-${{ inputs.language }}
+
+  iac:
+    name: IaC and manifest scan
+    if: inputs.scan-iac
+    runs-on: ${{ inputs.runs-on }}
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Checkov
+        uses: bridgecrewio/checkov-action@1246d92f57abae29d5db5f9aeeed2a9813e52d7d # v12
+        with:
+          directory: .
+          framework: terraform,helm,kubernetes,dockerfile,github_actions
+          soft_fail: false
+          output_format: cli,sarif
+          output_file_path: console,checkov.sarif
+
+      - name: Upload results
+        if: always()
+        uses: github/codeql-action/upload-sarif@f3712979fa5f215279b101dd0a2e3bdfb4353324 # v3
+        with:
+          sarif_file: checkov.sarif
+          category: checkov
