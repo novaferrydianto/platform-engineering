@@ -47,7 +47,9 @@ updates:
       backstage:
         patterns: ['@backstage/*']
     ignore:
-      # Backstage core requires React 18 and React Router 6.
+      # Keep idp-portal aligned with Backstage create-app major pins. Bumping
+      # these outside the template ranges breaks the portal until Backstage
+      # itself ships a compatible upgrade.
       - dependency-name: 'react'
         update-types: ['version-update:semver-major']
       - dependency-name: 'react-dom'
@@ -55,6 +57,16 @@ updates:
       - dependency-name: 'react-router'
         update-types: ['version-update:semver-major']
       - dependency-name: 'react-router-dom'
+        update-types: ['version-update:semver-major']
+      - dependency-name: '@testing-library/dom'
+        update-types: ['version-update:semver-major']
+      - dependency-name: '@testing-library/jest-dom'
+        update-types: ['version-update:semver-major']
+      - dependency-name: '@testing-library/react'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'cross-env'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'better-sqlite3'
         update-types: ['version-update:semver-major']
 
   - package-ecosystem: terraform
@@ -104,6 +116,13 @@ updates:
       # Golden path templates are pinned to vitest 2.x.
       - dependency-name: 'vitest'
         update-types: ['version-update:semver-major']
+      # Toolchain majors aren't covered by any CI that actually installs and
+      # builds this skeleton, so a green Dependabot check proves nothing.
+      # Bump these deliberately, not via auto-PR.
+      - dependency-name: 'typescript'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'vite'
+        update-types: ['version-update:semver-major']
 
   - package-ecosystem: npm
     directory: /golden-paths/nodejs-service/skeleton
@@ -115,4 +134,20 @@ updates:
       - dependency-name: 'vitest'
         update-types: ['version-update:semver-major']
       - dependency-name: '@vitest/coverage-v8'
+        update-types: ['version-update:semver-major']
+      # Toolchain majors aren't covered by any CI that actually installs and
+      # builds this skeleton, so a green Dependabot check proves nothing.
+      # Bump these deliberately, not via auto-PR.
+      - dependency-name: 'typescript'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'eslint'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'pino'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'pino-http'
+        update-types: ['version-update:semver-major']
+      # @types/node should track the pinned Node major below (docker
+      # ecosystem block: standardized on Node 24 LTS), not float ahead of the
+      # runtime it describes.
+      - dependency-name: '@types/node'
         update-types: ['version-update:semver-major']

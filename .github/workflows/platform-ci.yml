@@ -90,6 +90,10 @@ jobs:
         uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          # Public repos do not need a license. For private orgs, set
+          # GITLEAKS_LICENSE as a normal Actions secret *and* as a Dependabot
+          # secret — Dependabot PRs cannot read ordinary Actions secrets.
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
 
       - name: Checkov
         uses: bridgecrewio/checkov-action@1246d92f57abae29d5db5f9aeeed2a9813e52d7d # v12
@@ -126,7 +130,11 @@ jobs:
     name: Cost estimate
     # Requires an INFRACOST_API_KEY secret. Gated on a repository variable so a
     # fork without that secret gets a skipped job rather than a hard failure.
-    if: github.event_name == 'pull_request' && vars.INFRACOST_ENABLED == 'true'
+    # Dependabot PRs cannot access ordinary Actions secrets, so skip them too.
+    if: >
+      github.event_name == 'pull_request' &&
+      vars.INFRACOST_ENABLED == 'true' &&
+      github.actor != 'dependabot[bot]'
     uses: ./.github/workflows/reusable-cost-estimate.yml
     permissions:
       contents: read

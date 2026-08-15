@@ -112,7 +112,12 @@ and account:
    SHA-pinned allowlist; disable "Allow all actions".
 4. **Default `GITHUB_TOKEN` permissions**: read-only.
 5. **Secret scanning and push protection**: enabled.
-6. **Repository variables** for the OIDC role identifiers
+6. **Dependabot secrets** for any value CI needs on Dependabot PRs
+   (`GITLEAKS_LICENSE`, `INFRACOST_API_KEY`, …). Dependabot PRs cannot read
+   ordinary Actions secrets — duplicate each required secret under
+   Settings → Secrets and variables → Dependabot, or gate the job so
+   `github.actor != 'dependabot[bot]'` skips it.
+7. **Repository variables** for the OIDC role identifiers
    (`AWS_PLAN_ROLE_ARN`, `AWS_APPLY_ROLE_ARN`, `AWS_DEPLOY_ROLE_ARN`,
    `GCP_WORKLOAD_IDENTITY_PROVIDER`, `AZURE_CLIENT_ID`, …). These are
    identifiers, not secrets — the trust policy is what grants access, and it
