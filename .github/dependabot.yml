@@ -93,12 +93,13 @@ updates:
     schedule:
       interval: weekly
     labels: [dependencies, infrastructure]
-
-  - package-ecosystem: gomod
-    directory: /golden-paths/go-service/skeleton
-    schedule:
-      interval: weekly
-    labels: [dependencies, golden-path]
+    ignore:
+      # Provider majors can carry breaking schema changes and state-migration
+      # risk for every environment consuming these modules via Terragrunt.
+      # tofu validate alone can't rule that out. Upgrade deliberately, with a
+      # real plan against existing state, not via auto-merge.
+      - dependency-name: 'hashicorp/kubernetes'
+        update-types: ['version-update:semver-major']
 
   - package-ecosystem: docker
     directory: /golden-paths/go-service/skeleton
