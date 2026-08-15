@@ -22,8 +22,11 @@ updates:
     # `{%- if %}` blocks), not valid standalone YAML. The updater scans every
     # yaml file under `directory` looking for `uses:` references, not just
     # .github/workflows, so it aborts the whole job on this file otherwise.
+    # exclude-paths is matched against the full repo-root-relative path, not
+    # a path relative to `directory` as the docs describe -- confirmed from
+    # the updater's own debug log (`Checking entry path: golden-paths/...`).
     exclude-paths:
-      - catalog-info.yaml
+      - golden-paths/go-service/skeleton/catalog-info.yaml
 
   - package-ecosystem: github-actions
     directory: /golden-paths/nodejs-service/skeleton
@@ -31,7 +34,7 @@ updates:
       interval: weekly
     labels: [dependencies, golden-path]
     exclude-paths:
-      - catalog-info.yaml
+      - golden-paths/nodejs-service/skeleton/catalog-info.yaml
 
   - package-ecosystem: github-actions
     directory: /golden-paths/python-fastapi-service/skeleton
@@ -39,7 +42,7 @@ updates:
       interval: weekly
     labels: [dependencies, golden-path]
     exclude-paths:
-      - catalog-info.yaml
+      - golden-paths/python-fastapi-service/skeleton/catalog-info.yaml
 
   - package-ecosystem: github-actions
     directory: /golden-paths/static-site/skeleton
@@ -47,7 +50,7 @@ updates:
       interval: weekly
     labels: [dependencies, golden-path]
     exclude-paths:
-      - catalog-info.yaml
+      - golden-paths/static-site/skeleton/catalog-info.yaml
 
   - package-ecosystem: npm
     directory: /idp-portal
@@ -161,6 +164,8 @@ updates:
       - dependency-name: 'pino'
         update-types: ['version-update:semver-major']
       - dependency-name: 'pino-http'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'express'
         update-types: ['version-update:semver-major']
       # @types/node should track the pinned Node major below (docker
       # ecosystem block: standardized on Node 24 LTS), not float ahead of the
