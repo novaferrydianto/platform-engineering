@@ -31,9 +31,13 @@ def validate_template(path: Path) -> dict:
     rel = path.relative_to(ROOT)
 
     check(doc.get("kind") == "Template", f"{rel}: kind must be Template")
+
+    _VALID_API_VERSIONS = (
+        "scaffolder.backstage.io/v1beta3",
+    )
     check(
-        str(doc.get("apiVersion", "")).startswith("scaffolder.backstage.io/"),
-        f"{rel}: apiVersion must be a scaffolder.backstage.io version",
+        doc.get("apiVersion") in _VALID_API_VERSIONS,
+        f"{rel}: apiVersion must be one of {_VALID_API_VERSIONS}",
     )
 
     metadata = doc.get("metadata") or {}
