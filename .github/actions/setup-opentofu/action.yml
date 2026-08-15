@@ -27,11 +27,17 @@ runs:
         TG_VERSION: ${{ inputs.terragrunt-version }}
       run: |
         set -euo pipefail
-        url="https://github.com/gruntwork-io/terragrunt/releases/download/v${TG_VERSION}/terragrunt_linux_amd64"
-        curl -sSfL "$url" -o /tmp/terragrunt
-        curl -sSfL "${url}.sha256sum" -o /tmp/terragrunt.sha256sum
-        # Release checksum files list the asset name; verify against the downloaded file.
-        echo "$(cut -d' ' -f1 /tmp/terragrunt.sha256sum)  /tmp/terragrunt" | sha256sum -c -
+        base="https://github.com/gruntwork-io/terragrunt/releases/download/v${TG_VERSION}"
+        curl -sSfL "${base}/terragrunt_linux_amd64" -o /tmp/terragrunt
+        # Terragrunt publishes one combined SHA256SUMS for the release, not a
+        # per-asset .sha256sum file. Pull our asset's line out of it.
+        curl -sSfL "${base}/SHA256SUMS" -o /tmp/terragrunt.SHA256SUMS
+        expected="$(awk '$2 == "terragrunt_linux_amd64" {print $1}' /tmp/terragrunt.SHA256SUMS)"
+        if [ -z "$expected" ]; then
+          echo "::error::terragrunt_linux_amd64 not listed in SHA256SUMS for v${TG_VERSION}"
+          exit 1
+        fi
+        echo "${expected}  /tmp/terragrunt" | sha256sum -c -
         chmod +x /tmp/terragrunt
         sudo mv /tmp/terragrunt /usr/local/bin/terragrunt
         terragrunt --version

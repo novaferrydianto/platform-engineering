@@ -33,11 +33,19 @@ resource "azurerm_kubernetes_cluster" "this" {
   }
 
   default_node_pool {
-    name                         = "system"
-    vm_size                      = var.default_node_pool.vm_size
-    vnet_subnet_id               = var.subnet_id
-    os_disk_size_gb              = var.default_node_pool.os_disk_gb
-    os_disk_type                 = "Managed"
+    name           = "system"
+    vm_size        = var.default_node_pool.vm_size
+    vnet_subnet_id = var.subnet_id
+
+    os_disk_size_gb = var.default_node_pool.os_disk_gb
+    os_disk_type    = "Managed"
+
+    # Encrypts the VM host itself — temp disks, caches, and data flowing to
+    # storage. Managed disk encryption alone leaves host-level temp state in
+    # the clear. Requires the EncryptionAtHost feature registered on the
+    # subscription.
+    host_encryption_enabled = true
+
     auto_scaling_enabled         = true
     min_count                    = var.default_node_pool.min_count
     max_count                    = var.default_node_pool.max_count
@@ -119,16 +127,20 @@ resource "azurerm_kubernetes_cluster_node_pool" "this" {
   vm_size               = each.value.vm_size
   vnet_subnet_id        = var.subnet_id
   os_disk_size_gb       = each.value.os_disk_gb
-  auto_scaling_enabled  = true
-  min_count             = each.value.min_count
-  max_count             = each.value.max_count
-  priority              = each.value.spot ? "Spot" : "Regular"
-  eviction_policy       = each.value.spot ? "Delete" : null
-  spot_max_price        = each.value.spot ? -1 : null
-  node_labels           = each.value.labels
-  zones                 = ["1", "2", "3"]
-  max_pods              = 50
-  tags                  = local.tags
+
+  # Same reasoning as the system pool: encrypt the host, not just the disk.
+  host_encryption_enabled = true
+
+  auto_scaling_enabled = true
+  min_count            = each.value.min_count
+  max_count            = each.value.max_count
+  priority             = each.value.spot ? "Spot" : "Regular"
+  eviction_policy      = each.value.spot ? "Delete" : null
+  spot_max_price       = each.value.spot ? -1 : null
+  node_labels          = each.value.labels
+  zones                = ["1", "2", "3"]
+  max_pods             = 50
+  tags                 = local.tags
 
   upgrade_settings {
     max_surge = "33%"

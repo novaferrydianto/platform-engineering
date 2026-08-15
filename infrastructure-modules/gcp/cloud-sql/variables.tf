@@ -69,3 +69,13 @@ variable "labels" {
   type        = map(string)
   default     = {}
 }
+
+variable "extra_database_flags" {
+  description = <<-DESC
+    Additional Postgres flags, merged over the module's audit defaults. Intended
+    for tuning (work_mem, max_connections), not for disabling auditing — a value
+    here overrides the default of the same name, so review carefully.
+  DESC
+  type        = map(string)
+  default     = {}
+}

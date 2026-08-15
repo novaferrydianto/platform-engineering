@@ -56,9 +56,14 @@ jobs:
       - name: Sync to object storage
         env:
           BUCKET: ${{ inputs.site-name }}-${{ inputs.environment }}
+          # Interpolated into env rather than into the script body: a `${{ }}`
+          # expanded directly inside `run:` is substituted before the shell sees
+          # it, so any value containing shell syntax executes.
+          CLOUD: ${{ inputs.cloud }}
+          AZURE_STORAGE_ACCOUNT: ${{ vars.AZURE_STORAGE_ACCOUNT }}
         run: |
           set -euo pipefail
-          case "${{ inputs.cloud }}" in
+          case "$CLOUD" in
             aws)
               aws s3 sync dist/ "s3://$BUCKET/" --delete \
                 --exclude index.html --cache-control "public,max-age=31536000,immutable"
@@ -71,25 +76,35 @@ jobs:
               gcloud storage objects update "gs://$BUCKET/index.html" --cache-control "public,max-age=0,must-revalidate"
               ;;
             azure)
+              # '$web' is the literal container name Azure uses for static site
+              # hosting — it must not expand, so the single quotes are correct.
+              # shellcheck disable=SC2016
               az storage blob upload-batch --destination '$web' --source dist \
-                --account-name "${{ vars.AZURE_STORAGE_ACCOUNT }}" --overwrite --auth-mode login
+                --account-name "$AZURE_STORAGE_ACCOUNT" --overwrite --auth-mode login
               ;;
           esac
 
       - name: Invalidate CDN cache
+        env:
+          CLOUD: ${{ inputs.cloud }}
+          SITE_NAME: ${{ inputs.site-name }}
+          CLOUDFRONT_DISTRIBUTION_ID: ${{ vars.CLOUDFRONT_DISTRIBUTION_ID }}
+          GCP_URL_MAP: ${{ vars.GCP_URL_MAP }}
+          AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+          AZURE_FRONTDOOR_PROFILE: ${{ vars.AZURE_FRONTDOOR_PROFILE }}
         run: |
           set -euo pipefail
-          case "${{ inputs.cloud }}" in
+          case "$CLOUD" in
             aws)
               aws cloudfront create-invalidation \
-                --distribution-id "${{ vars.CLOUDFRONT_DISTRIBUTION_ID }}" --paths "/*"
+                --distribution-id "$CLOUDFRONT_DISTRIBUTION_ID" --paths "/*"
               ;;
             gcp)
-              gcloud compute url-maps invalidate-cdn-cache "${{ vars.GCP_URL_MAP }}" --path "/*" --async
+              gcloud compute url-maps invalidate-cdn-cache "$GCP_URL_MAP" --path "/*" --async
               ;;
             azure)
-              az afd endpoint purge --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
-                --profile-name "${{ vars.AZURE_FRONTDOOR_PROFILE }}" \
-                --endpoint-name "${{ inputs.site-name }}" --content-paths "/*"
+              az afd endpoint purge --resource-group "$AZURE_RESOURCE_GROUP" \
+                --profile-name "$AZURE_FRONTDOOR_PROFILE" \
+                --endpoint-name "$SITE_NAME" --content-paths "/*"
               ;;
           esac

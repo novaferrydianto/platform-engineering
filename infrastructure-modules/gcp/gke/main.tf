@@ -28,6 +28,11 @@ resource "google_container_cluster" "this" {
   network    = var.network_name
   subnetwork = var.subnet_name
 
+  # Pod-to-pod traffic on the same node otherwise bypasses the VPC entirely,
+  # so it never reaches flow logs or firewall rules — a blind spot exactly
+  # where lateral movement happens.
+  enable_intranode_visibility = true
+
   # The default node pool is removed immediately; pools are managed separately
   # below so they can be replaced without recreating the cluster.
   remove_default_node_pool = true

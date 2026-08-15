@@ -1,3 +1,7 @@
+data "aws_caller_identity" "current" {}
+
+data "aws_region" "current" {}
+
 locals {
   tags        = merge(var.tags, { Name = var.name, ManagedBy = "opentofu" })
   public_azs  = slice(var.availability_zones, 0, length(var.public_subnet_cidrs))
@@ -123,11 +127,76 @@ resource "aws_route_table_association" "private" {
   route_table_id = aws_route_table.private[count.index].id
 }
 
+# Flow logs record who talked to whom across the VPC — the primary evidence in
+# a lateral-movement investigation. That makes the log group itself sensitive,
+# so it gets its own key rather than relying on the CloudWatch default.
+resource "aws_kms_key" "flow_logs" {
+  count = var.enable_flow_logs ? 1 : 0
+
+  description             = "VPC flow log encryption for ${var.name}"
+  enable_key_rotation     = true
+  deletion_window_in_days = 30
+  policy                  = data.aws_iam_policy_document.flow_logs_kms[0].json
+  tags                    = local.tags
+}
+
+# CloudWatch Logs cannot use a key it is not granted access to; without this
+# statement the log group fails to create.
+data "aws_iam_policy_document" "flow_logs_kms" {
+  count = var.enable_flow_logs ? 1 : 0
+
+  statement {
+    sid    = "AllowRootAccountAdministration"
+    effect = "Allow"
+
+    principals {
+      type        = "AWS"
+      identifiers = ["arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"]
+    }
+
+    actions   = ["kms:*"]
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "AllowCloudWatchLogs"
+    effect = "Allow"
+
+    principals {
+      type        = "Service"
+      identifiers = ["logs.${data.aws_region.current.region}.amazonaws.com"]
+    }
+
+    actions = [
+      "kms:Encrypt*",
+      "kms:Decrypt*",
+      "kms:ReEncrypt*",
+      "kms:GenerateDataKey*",
+      "kms:Describe*",
+    ]
+    resources = ["*"]
+
+    condition {
+      test     = "ArnLike"
+      variable = "kms:EncryptionContext:aws:logs:arn"
+      values   = ["arn:aws:logs:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/vpc/${var.name}/flow-logs"]
+    }
+  }
+}
+
+resource "aws_kms_alias" "flow_logs" {
+  count = var.enable_flow_logs ? 1 : 0
+
+  name          = "alias/vpc-flow-logs-${var.name}"
+  target_key_id = aws_kms_key.flow_logs[0].key_id
+}
+
 resource "aws_cloudwatch_log_group" "flow_logs" {
   count = var.enable_flow_logs ? 1 : 0
 
   name              = "/aws/vpc/${var.name}/flow-logs"
   retention_in_days = var.flow_logs_retention_days
+  kms_key_id        = aws_kms_key.flow_logs[0].arn
   tags              = local.tags
 }
 

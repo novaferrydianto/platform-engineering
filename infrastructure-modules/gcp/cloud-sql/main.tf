@@ -1,5 +1,29 @@
 locals {
   is_postgres = startswith(var.database_version, "POSTGRES")
+
+  # Audit and diagnostic flags applied to every Postgres instance. Callers add
+  # to these via var.extra_database_flags rather than replacing them, so a
+  # per-environment override cannot silently switch auditing off.
+  postgres_audit_flags = merge({
+    log_connections    = "on"
+    log_disconnections = "on"
+    log_checkpoints    = "on"
+    log_lock_waits     = "on"
+    log_duration       = "on"
+    log_hostname       = "on"
+
+    # ddl logs schema changes without the write volume of logging every
+    # statement; raise to "all" where a workload's compliance scope requires it.
+    log_statement = "ddl"
+
+    # Default is "error", which hides warnings that precede real incidents.
+    "log_min_messages" = "warning"
+
+    # Extension-based auditing. Requires pgaudit in shared_preload_libraries,
+    # which cloudsql.enable_pgaudit turns on.
+    "cloudsql.enable_pgaudit" = "on"
+    "pgaudit.log"             = "ddl,write"
+  }, var.extra_database_flags)
 }
 
 resource "google_sql_database_instance" "this" {
@@ -49,21 +73,15 @@ resource "google_sql_database_instance" "this" {
       record_client_address   = false
     }
 
+    # Postgres audit logging. Without these an incident has no record of who
+    # connected, what ran, or how long it held locks — the questions actually
+    # asked during a breach investigation.
     dynamic "database_flags" {
-      for_each = local.is_postgres ? [1] : []
+      for_each = local.is_postgres ? local.postgres_audit_flags : {}
 
       content {
-        name  = "log_connections"
-        value = "on"
-      }
-    }
-
-    dynamic "database_flags" {
-      for_each = local.is_postgres ? [1] : []
-
-      content {
-        name  = "log_disconnections"
-        value = "on"
+        name  = database_flags.key
+        value = database_flags.value
       }
     }
   }
