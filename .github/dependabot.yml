@@ -18,24 +18,36 @@ updates:
     schedule:
       interval: weekly
     labels: [dependencies, golden-path]
+    # catalog-info.yaml is a Backstage scaffolder template (unrendered
+    # `{%- if %}` blocks), not valid standalone YAML. The updater scans every
+    # yaml file under `directory` looking for `uses:` references, not just
+    # .github/workflows, so it aborts the whole job on this file otherwise.
+    exclude-paths:
+      - catalog-info.yaml
 
   - package-ecosystem: github-actions
     directory: /golden-paths/nodejs-service/skeleton
     schedule:
       interval: weekly
     labels: [dependencies, golden-path]
+    exclude-paths:
+      - catalog-info.yaml
 
   - package-ecosystem: github-actions
     directory: /golden-paths/python-fastapi-service/skeleton
     schedule:
       interval: weekly
     labels: [dependencies, golden-path]
+    exclude-paths:
+      - catalog-info.yaml
 
   - package-ecosystem: github-actions
     directory: /golden-paths/static-site/skeleton
     schedule:
       interval: weekly
     labels: [dependencies, golden-path]
+    exclude-paths:
+      - catalog-info.yaml
 
   - package-ecosystem: npm
     directory: /idp-portal
@@ -70,7 +82,11 @@ updates:
         update-types: ['version-update:semver-major']
 
   - package-ecosystem: terraform
-    directory: /infrastructure-modules
+    # No .tf files live directly in /infrastructure-modules — every module is
+    # two levels down (e.g. aws/vpc, gcp/gke). `directory` doesn't recurse,
+    # so the updater found nothing here; `directories` does glob-expand.
+    directories:
+      - /infrastructure-modules/*/*
     schedule:
       interval: weekly
     labels: [dependencies, infrastructure]
