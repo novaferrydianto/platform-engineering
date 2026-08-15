@@ -78,6 +78,8 @@ jobs:
     permissions:
       contents: read
       security-events: write
+      pull-requests: read
+      actions: read
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -102,7 +104,7 @@ jobs:
           output_file_path: console,checkov.sarif
 
       - name: Upload results
-        if: always()
+        if: always() && hashFiles('checkov.sarif') != ''
         uses: github/codeql-action/upload-sarif@f3712979fa5f215279b101dd0a2e3bdfb4353324 # v3
         with:
           sarif_file: checkov.sarif

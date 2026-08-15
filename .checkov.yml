@@ -49,6 +49,11 @@ skip-check:
   - CKV_GCP_69
   - CKV_GCP_13
 
+  # Labels are exposed as an input (var.labels) so callers can attach their own
+  # org-specific metadata. Static analysis on the module alone sees only the
+  # default empty map.
+  - CKV_GCP_21
+
   # --- Deliberate trade-offs ---
 
   # Log retention is 90 days, set per module and overridable. One year of hot
@@ -77,6 +82,10 @@ skip-check:
   # Database major version is pinned intentionally. Tracking "latest" would make
   # an upgrade happen on Google's schedule rather than the platform team's.
   - CKV_GCP_79
+
+  # log_min_messages is set to "warning" intentionally to capture warnings that
+  # precede incidents, whereas CIS/Checkov CKV_GCP_109 checks for "error" or higher severity.
+  - CKV_GCP_109
 
   # Access logging writes to a second bucket that the module would have to
   # create and secure, recursively. Audit trails come from CloudTrail data
