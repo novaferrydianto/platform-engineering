@@ -45,14 +45,14 @@ jobs:
       pull-requests: write # to post the cost comment
     steps:
       - name: Set up Infracost
-        uses: infracost/actions/setup@e9d6e6cd65e168e76b0de50ff9957d2fe8bb1832 # v3
+        uses: infracost/actions/setup@fb736a8f219195d6efdca58682069b16fe1bc280 # v4.2.0
         with:
           api-key: ${{ secrets.infracost-api-key }}
 
       # The base branch is priced first so the comment can show a delta rather
       # than a meaningless absolute number.
       - name: Check out base branch
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.pull_request.base.ref }}
           persist-credentials: false
@@ -69,7 +69,7 @@ jobs:
             --out-file=/tmp/infracost-base.json
 
       - name: Check out PR branch
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 

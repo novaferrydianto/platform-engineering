@@ -94,3 +94,25 @@ updates:
       # Standardized on Python 3.13.
       - dependency-name: 'python'
         update-types: ['version-update:semver-major']
+
+  - package-ecosystem: npm
+    directory: /golden-paths/static-site/skeleton
+    schedule:
+      interval: weekly
+    labels: [dependencies, golden-path]
+    ignore:
+      # Golden path templates are pinned to vitest 2.x.
+      - dependency-name: 'vitest'
+        update-types: ['version-update:semver-major']
+
+  - package-ecosystem: npm
+    directory: /golden-paths/nodejs-service/skeleton
+    schedule:
+      interval: weekly
+    labels: [dependencies, golden-path]
+    ignore:
+      # Golden path templates are pinned to vitest 2.x.
+      - dependency-name: 'vitest'
+        update-types: ['version-update:semver-major']
+      - dependency-name: '@vitest/coverage-v8'
+        update-types: ['version-update:semver-major']
