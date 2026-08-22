@@ -76,7 +76,7 @@ jobs:
       - name: Upload results
         if: always() && hashFiles('trivy-fs.sarif') != ''
         continue-on-error: true
-        uses: github/codeql-action/upload-sarif@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6
+        uses: github/codeql-action/upload-sarif@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4.37.7
         with:
           sarif_file: trivy-fs.sarif
           category: trivy-fs
@@ -94,17 +94,17 @@ jobs:
           persist-credentials: false
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6
+        uses: github/codeql-action/init@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4.37.7
         with:
           languages: ${{ inputs.language == 'python' && 'python' || inputs.language == 'go' && 'go' || 'javascript-typescript' }}
           queries: security-extended
           token: ${{ github.token }}
 
       - name: Autobuild
-        uses: github/codeql-action/autobuild@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6
+        uses: github/codeql-action/autobuild@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4.37.7
 
       - name: Analyze
-        uses: github/codeql-action/analyze@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6
+        uses: github/codeql-action/analyze@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4.37.7
         with:
           category: codeql-${{ inputs.language }}
 
@@ -122,7 +122,7 @@ jobs:
           persist-credentials: false
 
       - name: Checkov
-        uses: bridgecrewio/checkov-action@1246d92f57abae29d5db5f9aeeed2a9813e52d7d # v12
+        uses: bridgecrewio/checkov-action@3be6be7935e32c4c683b1d40622aa43a7c8bbcaa # v12
         with:
           directory: .
           # No config_file here: a generated service repo has no .checkov.yml of
@@ -136,7 +136,7 @@ jobs:
       - name: Upload results
         if: always() && hashFiles('checkov.sarif') != ''
         continue-on-error: true
-        uses: github/codeql-action/upload-sarif@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6
+        uses: github/codeql-action/upload-sarif@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4.37.7
         with:
           sarif_file: checkov.sarif
           category: checkov
