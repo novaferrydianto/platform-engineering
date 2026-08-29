@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # checkov:skip=CKV_DOCKER_2:Runtime is distroless/static with no shell, so a HEALTHCHECK command cannot execute. Liveness and readiness are defined in helm/values.yaml, where Kubernetes acts on them.
-FROM golang:1.26-alpine AS build
+FROM golang:1.27-alpine AS build
 WORKDIR /src
 
 COPY go.mod go.sum ./
