@@ -45,7 +45,7 @@ jobs:
       pull-requests: write # to post the cost comment
     steps:
       - name: Set up Infracost
-        uses: infracost/actions/setup@fb736a8f219195d6efdca58682069b16fe1bc280 # v4.2.0
+        uses: infracost/actions/setup@a5783eb98adc93aa7a0049fce0abb06fdd30770a # v5.0.1
         with:
           api-key: ${{ secrets.infracost-api-key }}
 
